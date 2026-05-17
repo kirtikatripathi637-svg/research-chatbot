@@ -1,130 +1,48 @@
 import streamlit as st
 from pypdf import PdfReader
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-
-from langchain_google_genai import (
-    GoogleGenerativeAIEmbeddings,
-    ChatGoogleGenerativeAI
-)
-
-from langchain.chains.question_answering import load_qa_chain
-
-import os
-
 # TITLE
-st.title("📚 Research Paper Q&A Assistant")
+st.title("📚 Simple Research PDF Chatbot")
 
-# PDF TEXT
-def get_pdf_text(pdf_docs):
+# PDF TEXT EXTRACT
+def get_pdf_text(pdf):
 
     text = ""
 
-    for pdf in pdf_docs:
+    pdf_reader = PdfReader(pdf)
 
-        pdf_reader = PdfReader(pdf)
+    for page in pdf_reader.pages:
 
-        for page in pdf_reader.pages:
+        content = page.extract_text()
 
-            text += page.extract_text()
+        if content:
+            text += content
 
     return text
 
-# CHUNKS
-def get_text_chunks(text):
+# FILE UPLOAD
+pdf = st.file_uploader(
+    "Upload Research Paper PDF",
+    type="pdf"
+)
 
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200
-    )
+# PROCESS PDF
+if pdf is not None:
 
-    chunks = splitter.split_text(text)
+    text = get_pdf_text(pdf)
 
-    return chunks
+    st.success("PDF Uploaded Successfully ✅")
 
-# VECTOR STORE
-def get_vector_store(chunks):
+    # QUESTION INPUT
+    question = st.text_input("Ask Question from PDF")
 
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001"
-    )
+    if question:
 
-    vector_store = FAISS.from_texts(
-        chunks,
-        embedding=embeddings
-    )
+        # SIMPLE SEARCH
+        if question.lower() in text.lower():
 
-    vector_store.save_local("faiss_index")
+            st.write("✅ Answer Found in PDF")
 
-# QA CHAIN
-def get_chain():
+        else:
 
-    model = ChatGoogleGenerativeAI(
-        model="gemini-pro",
-        temperature=0.3
-    )
-
-    chain = load_qa_chain(
-        model,
-        chain_type="stuff"
-    )
-
-    return chain
-
-# QUESTION
-def answer_question(user_question):
-
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001"
-    )
-
-    db = FAISS.load_local(
-        "faiss_index",
-        embeddings,
-        allow_dangerous_deserialization=True
-    )
-
-    docs = db.similarity_search(user_question)
-
-    chain = get_chain()
-
-    response = chain(
-        {
-            "input_documents": docs,
-            "question": user_question
-        },
-        return_only_outputs=True
-    )
-
-    st.write("## Answer")
-    st.write(response["output_text"])
-
-# SIDEBAR
-with st.sidebar:
-
-    st.header("Upload PDFs")
-
-    pdf_docs = st.file_uploader(
-        "Upload Research Papers",
-        accept_multiple_files=True
-    )
-
-    if st.button("Process PDFs"):
-
-        with st.spinner("Processing..."):
-
-            raw_text = get_pdf_text(pdf_docs)
-
-            chunks = get_text_chunks(raw_text)
-
-            get_vector_store(chunks)
-
-            st.success("Done")
-
-# QUESTION INPUT
-user_question = st.text_input("Ask Question")
-
-if user_question:
-
-    answer_question(user_question)
+            st.write("❌ Answer not found")
